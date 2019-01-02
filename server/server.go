@@ -56,8 +56,9 @@ func Start(cmd *cobra.Command, args []string) {
 		updateConfig(&pc, promEndpoint)
 		json.NewEncoder(w).Encode(promEndpoint)
 	}).Methods("POST")
-	log.Infof("Listening on %s", ":8000")
-	log.Fatal(http.ListenAndServe(":8000", router))
+	bindAddress, _ := cmd.Flags().GetString("bind-address")
+	log.Infof("Listening on %s", bindAddress)
+	log.Fatal(http.ListenAndServe(bindAddress, router))
 }
 
 func updateConfig(pc *prometheusConfig, pe prometheus.ScrapeConfig) (err error) {
