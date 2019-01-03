@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 
 	log "github.com/Sirupsen/logrus"
@@ -48,6 +50,7 @@ func Start(cmd *cobra.Command, args []string) {
 	}
 
 	// Write basic output file to allow prometheus server to start
+	os.MkdirAll(filepath.Dir(outputFile), 0755)
 	ioutil.WriteFile(outputFile, yamlFile, 0644)
 
 	router := mux.NewRouter().StrictSlash(true)
@@ -103,7 +106,11 @@ func updateConfig(pc *prometheusConfig, pe prometheus.ScrapeConfig, outputFile, 
 	if err != nil {
 		log.Errorf("Failed to encode prometheus configuration: %s", d)
 	}
-	ioutil.WriteFile(outputFile, d, 0644)
+
+	err = ioutil.WriteFile(outputFile, d, 0644)
+	if err != nil {
+		log.Errorf("failed to write output file: %s", err)
+	}
 
 	return
 }
