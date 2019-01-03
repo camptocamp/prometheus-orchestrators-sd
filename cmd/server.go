@@ -7,6 +7,9 @@ import (
 )
 
 var bindAddress string
+var outputFile string
+var inputFile string
+
 var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Start POSD as server",
@@ -14,11 +17,21 @@ var serverCmd = &cobra.Command{
 		if bindAddress == "" {
 			bindAddress = "0.0.0.0:8000"
 		}
+
+		if outputFile == "" {
+			outputFile = "prometheus.yml"
+		}
+
+		if inputFile == "" {
+			inputFile = "prometheus.yml"
+		}
 	},
 	Run: server.Start,
 }
 
 func init() {
 	serverCmd.Flags().StringVarP(&bindAddress, "bind-address", "b", "", "Address to bind on.")
+	serverCmd.Flags().StringVarP(&outputFile, "output-file", "o", "", "Output file (default: prometheus.yml)")
+	serverCmd.Flags().StringVarP(&inputFile, "input-file", "i", "", "Input file (default: prometheus.yml)")
 	rootCmd.AddCommand(serverCmd)
 }
