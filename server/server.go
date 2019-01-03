@@ -47,6 +47,9 @@ func Start(cmd *cobra.Command, args []string) {
 		log.Fatalf("failed to unmarshal prometheus config: %s", err)
 	}
 
+	// Write basic output file to allow prometheus server to start
+	ioutil.WriteFile(outputFile, yamlFile, 0644)
+
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/endpoint", func(w http.ResponseWriter, r *http.Request) {
 		var promEndpoint prometheus.ScrapeConfig
