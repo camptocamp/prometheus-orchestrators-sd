@@ -9,5 +9,6 @@ RUN make posd
 FROM scratch
 COPY --from=builder /etc/ssl /etc/ssl
 COPY --from=builder /go/src/github.com/camptocamp/prometheus-orchestrators-sd/posd /
+COPY --from=builder /etc/passwd /etc/passwd
 ENTRYPOINT ["/posd"]
 CMD [""]
