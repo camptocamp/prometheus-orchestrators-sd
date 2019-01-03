@@ -35,6 +35,7 @@ func Start(cmd *cobra.Command, args []string) {
 	bindAddress, _ := cmd.Flags().GetString("bind-address")
 	outputFile, _ := cmd.Flags().GetString("output-file")
 	inputFile, _ := cmd.Flags().GetString("input-file")
+	customSCFile, _ := cmd.Flags().GetString("custom-sc-file")
 
 	yamlFile, err := ioutil.ReadFile(inputFile)
 	if err != nil {
@@ -56,14 +57,20 @@ func Start(cmd *cobra.Command, args []string) {
 			})
 			return
 		}
-		updateConfig(&pc, promEndpoint, outputFile)
+		updateConfig(&pc, promEndpoint, outputFile, customSCFile)
 		json.NewEncoder(w).Encode(promEndpoint)
 	}).Methods("POST")
 	log.Infof("Listening on %s", bindAddress)
 	log.Fatal(http.ListenAndServe(bindAddress, router))
 }
 
-func updateConfig(pc *prometheusConfig, pe prometheus.ScrapeConfig, outputFile string) (err error) {
+func updateConfig(pc *prometheusConfig, pe prometheus.ScrapeConfig, outputFile, customSCFile string) (err error) {
+	err = formatScrapeConfig(&pe, customSCFile)
+	if err != nil {
+		err = fmt.Errorf("failed to format scrape config: %s", err)
+		return
+	}
+
 	exists := false
 	for sck, sc := range pc.ScrapeConfigs {
 		if sc.JobName == pe.JobName {
@@ -95,5 +102,27 @@ func updateConfig(pc *prometheusConfig, pe prometheus.ScrapeConfig, outputFile s
 	}
 	ioutil.WriteFile(outputFile, d, 0644)
 
+	return
+}
+
+func formatScrapeConfig(pe *prometheus.ScrapeConfig, customSCFile string) (err error) {
+	if customSCFile == "" {
+		return
+	}
+
+	var customSC prometheus.ScrapeConfig
+	yamlFile, err := ioutil.ReadFile(customSCFile)
+	if err != nil {
+		return fmt.Errorf("failed to load file: %s", err)
+	}
+
+	err = yaml.Unmarshal(yamlFile, &customSC)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal prometheus config: %s", err)
+	}
+
+	if customSC.Params != nil && pe.Params == nil {
+		pe.Params = customSC.Params
+	}
 	return
 }

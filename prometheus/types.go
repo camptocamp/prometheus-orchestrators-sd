@@ -4,6 +4,7 @@ package prometheus
 type ScrapeConfig struct {
 	JobName        string            `json:"job_name"`
 	HonorLabels    bool              `json:"honor_labels,omitempty"`
+	Params         interface{}       `json:"params,omitempty"`
 	ScrapeInterval string            `json:"scrape_interval,omitempty"`
 	ScrapeTimeout  string            `json:"scrape_timeout,omitempty"`
 	MetricsPath    string            `json:"metrics_path,omitempty"`

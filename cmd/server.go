@@ -9,6 +9,7 @@ import (
 var bindAddress string
 var outputFile string
 var inputFile string
+var customSCFile string
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
@@ -33,5 +34,6 @@ func init() {
 	serverCmd.Flags().StringVarP(&bindAddress, "bind-address", "b", "", "Address to bind on.")
 	serverCmd.Flags().StringVarP(&outputFile, "output-file", "o", "", "Output file (default: prometheus.yml)")
 	serverCmd.Flags().StringVarP(&inputFile, "input-file", "i", "", "Input file (default: prometheus.yml)")
+	serverCmd.Flags().StringVarP(&customSCFile, "custom-sc-file", "c", "", "Custom scrape config fields file")
 	rootCmd.AddCommand(serverCmd)
 }
