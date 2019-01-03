@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -119,6 +120,10 @@ func (o *CattleOrchestrator) buildTarget(stack client.Stack) (err error) {
 			Targets: []string{
 				fmt.Sprintf("%s:%s", stack.Environment["PROMETHEUS_FQDN"].(string), promPort),
 			},
+			Labels: map[string]string{
+				"rancher_site": strings.Split(project.Links["self"], "/")[2],
+				"rancher_url":  project.Links["self"],
+			},
 		},
 	}
 
@@ -135,7 +140,6 @@ func (o *CattleOrchestrator) buildTarget(stack client.Stack) (err error) {
 	} else {
 		p.Scheme = "https"
 	}
-
 	err = o.sendTarget(p)
 	if err != nil {
 		return fmt.Errorf("failed to export target: %s", err)
