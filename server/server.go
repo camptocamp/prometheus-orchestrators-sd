@@ -1,43 +1,46 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"path/filepath"
 	"reflect"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/ghodss/yaml"
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 
 	"github.com/camptocamp/prometheus-orchestrators-sd/prometheus"
 )
 
-type formattedError struct {
-	Msg string `json:"msg"`
-}
-
 type prometheusConfig struct {
-	GlobalConfig   interface{}               `json:"global"`
-	AlertingConfig interface{}               `json:"alerting,omitempty"`
-	RuleFiles      interface{}               `json:"rule_files,omitempty"`
-	ScrapeConfigs  []prometheus.ScrapeConfig `json:"scrape_configs"`
+	GlobalConfig   interface{}               `yaml:"global,omitempty"`
+	AlertingConfig interface{}               `yaml:"alerting,omitempty"`
+	RuleFiles      interface{}               `yaml:"rule_files,omitempty"`
+	ScrapeConfigs  []prometheus.ScrapeConfig `yaml:"scrape_configs"`
 
-	RemoteWriteConfigs interface{} `json:"remote_write,omitempty"`
-	RemoteReadConfigs  interface{} `json:"remote_read,omitempty"`
+	RemoteWriteConfigs interface{} `yaml:"remote_write,omitempty"`
+	RemoteReadConfigs  interface{} `yaml:"remote_read,omitempty"`
 }
 
 // Start is the main function that handles requests from POSD agents
 func Start(cmd *cobra.Command, args []string) {
-	var pc prometheusConfig
 	bindAddress, _ := cmd.Flags().GetString("bind-address")
+	psk, _ := cmd.Flags().GetString("psk")
 	outputFile, _ := cmd.Flags().GetString("output-file")
 	inputFile, _ := cmd.Flags().GetString("input-file")
 	customSCFile, _ := cmd.Flags().GetString("custom-sc-file")
+	refreshInterval, _ := cmd.Flags().GetString("refresh-interval")
+
+	interval, err := time.ParseDuration(refreshInterval)
+	if err != nil {
+		log.Fatalf("failed to parse refresh interval: %s", err)
+	}
+
+	var jobs []prometheus.ScrapeConfig
+	var pc prometheusConfig
 
 	yamlFile, err := ioutil.ReadFile(inputFile)
 	if err != nil {
@@ -49,69 +52,84 @@ func Start(cmd *cobra.Command, args []string) {
 		log.Fatalf("failed to unmarshal prometheus config: %s", err)
 	}
 
-	// Write basic output file to allow prometheus server to start
-	os.MkdirAll(filepath.Dir(outputFile), 0755)
-	ioutil.WriteFile(outputFile, yamlFile, 0644)
+	go httpServer(bindAddress)
 
-	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/endpoint", func(w http.ResponseWriter, r *http.Request) {
-		var promEndpoint prometheus.ScrapeConfig
-		err := json.NewDecoder(r.Body).Decode(&promEndpoint)
+	for {
+		log.Debugf("Sleeping for %s", interval)
+		time.Sleep(interval)
+
+		agents, err := retrieveAgentsList("agents.yml")
 		if err != nil {
-			json.NewEncoder(w).Encode(formattedError{
-				Msg: fmt.Sprintf("failed to decode body: %s", err),
-			})
-			return
+			log.Errorf("failed to retrieve agents list: %s", err)
+			continue
 		}
-		updateConfig(&pc, promEndpoint, outputFile, customSCFile)
-		json.NewEncoder(w).Encode(promEndpoint)
-	}).Methods("POST")
-	log.Infof("Listening on %s", bindAddress)
-	log.Fatal(http.ListenAndServe(bindAddress, router))
+
+		for agentName, agentEndpoint := range agents {
+			jobs, err = retrieveJobsFromAgent(agentEndpoint, psk)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"agent": agentName,
+				}).Errorf("failed to retrieve jobs from agent: %s", err)
+				continue
+			}
+			err = updatePromConfig(&pc, jobs, outputFile, customSCFile)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"agent": agentName,
+				}).Errorf("failed to update prometheus config: %s", err)
+				continue
+			}
+		}
+	}
+	// Write basic output file to allow prometheus server to start
+	//os.MkdirAll(filepath.Dir(outputFile), 0755)
+	//ioutil.WriteFile(outputFile, yamlFile, 0644)
+	return
 }
 
-func updateConfig(pc *prometheusConfig, pe prometheus.ScrapeConfig, outputFile, customSCFile string) (err error) {
-	err = formatScrapeConfig(&pe, customSCFile)
-	if err != nil {
-		err = fmt.Errorf("failed to format scrape config: %s", err)
-		return
-	}
+func updatePromConfig(pc *prometheusConfig, jobs []prometheus.ScrapeConfig, outputFile, customSCFile string) (err error) {
+	for _, job := range jobs {
+		err = formatScrapeConfig(&job, customSCFile)
+		if err != nil {
+			err = fmt.Errorf("failed to format scrape config: %s", err)
+			return
+		}
 
-	exists := false
-	for sck, sc := range pc.ScrapeConfigs {
-		if sc.JobName == pe.JobName {
-			exists = true
-			if reflect.DeepEqual(sc, pe) {
-				return
+		exists := false
+		for sck, sc := range pc.ScrapeConfigs {
+			if sc.JobName == job.JobName {
+				exists = true
+				if reflect.DeepEqual(sc, job) {
+					return
+				}
+				pc.ScrapeConfigs[sck] = job
+				log.WithFields(log.Fields{
+					"job_name": job.JobName,
+				}).Infof("prometheus scrape config updated")
 			}
-			pc.ScrapeConfigs[sck] = pe
+		}
+		if !exists {
+			pc.ScrapeConfigs = append(pc.ScrapeConfigs, job)
 			log.WithFields(log.Fields{
-				"name": pe.JobName,
-			}).Infof("config updated")
+				"job_name": job.JobName,
+			}).Infof("prometheus scrape config added")
+		}
+
+		if err != nil {
+			log.WithFields(log.Fields{
+				"job_name": job.JobName,
+			}).Errorf("failed to export targets: %s", err)
+		}
+		d, err := yaml.Marshal(pc)
+		if err != nil {
+			log.Errorf("Failed to encode prometheus configuration: %s", d)
+		}
+
+		err = ioutil.WriteFile(outputFile, d, 0644)
+		if err != nil {
+			log.Errorf("failed to write output file: %s", err)
 		}
 	}
-	if !exists {
-		pc.ScrapeConfigs = append(pc.ScrapeConfigs, pe)
-		log.WithFields(log.Fields{
-			"name": pe.JobName,
-		}).Infof("config added")
-	}
-
-	if err != nil {
-		log.WithFields(log.Fields{
-			"name": pe.JobName,
-		}).Errorf("failed to export targets: %s", err)
-	}
-	d, err := yaml.Marshal(pc)
-	if err != nil {
-		log.Errorf("Failed to encode prometheus configuration: %s", d)
-	}
-
-	err = ioutil.WriteFile(outputFile, d, 0644)
-	if err != nil {
-		log.Errorf("failed to write output file: %s", err)
-	}
-
 	return
 }
 
@@ -135,4 +153,60 @@ func formatScrapeConfig(pe *prometheus.ScrapeConfig, customSCFile string) (err e
 		pe.Params = customSC.Params
 	}
 	return
+}
+
+func retrieveAgentsList(listPath string) (agents map[string]string, err error) {
+	raw, err := ioutil.ReadFile(listPath)
+	if err != nil {
+		err = fmt.Errorf("failed to read agents list file: %s", err)
+		return
+	}
+
+	err = yaml.Unmarshal(raw, &agents)
+	if err != nil {
+		err = fmt.Errorf("failed to unmarshal agent list: %s", err)
+		return
+	}
+	return
+}
+
+func retrieveJobsFromAgent(endpoint, psk string) (jobs []prometheus.ScrapeConfig, err error) {
+	clientHTTP := &http.Client{}
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		err = fmt.Errorf("failed to build request: %s", err)
+		return
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", psk))
+
+	res, err := clientHTTP.Do(req)
+	if err != nil {
+		err = fmt.Errorf("failed to request endpoint: %s", err)
+		return
+	}
+
+	defer res.Body.Close()
+	rawJobs, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		err = fmt.Errorf("failed to read the response body: %s", err)
+		return
+	}
+
+	err = yaml.Unmarshal([]byte(rawJobs), &jobs)
+	if err != nil {
+		err = fmt.Errorf("failed to unmarshal jobs: %s", err)
+		return
+	}
+	return
+}
+
+func httpServer(bindAddress string) {
+	router := mux.NewRouter().StrictSlash(true)
+
+	router.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+	}).Methods("GET")
+
+	log.Infof("Prometheus endpoint on http://%s/metrics", bindAddress)
+	log.Fatal(http.ListenAndServe(bindAddress, router))
 }
