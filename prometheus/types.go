@@ -38,3 +38,14 @@ type StaticConfig struct {
 	Targets []string          `yaml:"targets"`
 	Labels  map[string]string `yaml:"labels,omitempty"`
 }
+
+// Config is a minimalist version of the Prometheus Config structure
+type Config struct {
+	GlobalConfig   interface{}    `yaml:"global,omitempty"`
+	AlertingConfig interface{}    `yaml:"alerting,omitempty"`
+	RuleFiles      interface{}    `yaml:"rule_files,omitempty"`
+	ScrapeConfigs  []ScrapeConfig `yaml:"scrape_configs"`
+
+	RemoteWriteConfigs interface{} `yaml:"remote_write,omitempty"`
+	RemoteReadConfigs  interface{} `yaml:"remote_read,omitempty"`
+}

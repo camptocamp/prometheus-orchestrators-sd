@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -15,16 +17,6 @@ import (
 	"github.com/camptocamp/prometheus-orchestrators-sd/prometheus"
 )
 
-type prometheusConfig struct {
-	GlobalConfig   interface{}               `yaml:"global,omitempty"`
-	AlertingConfig interface{}               `yaml:"alerting,omitempty"`
-	RuleFiles      interface{}               `yaml:"rule_files,omitempty"`
-	ScrapeConfigs  []prometheus.ScrapeConfig `yaml:"scrape_configs"`
-
-	RemoteWriteConfigs interface{} `yaml:"remote_write,omitempty"`
-	RemoteReadConfigs  interface{} `yaml:"remote_read,omitempty"`
-}
-
 // Start is the main function that handles requests from POSD agents
 func Start(cmd *cobra.Command, args []string) {
 	bindAddress, _ := cmd.Flags().GetString("bind-address")
@@ -33,14 +25,17 @@ func Start(cmd *cobra.Command, args []string) {
 	inputFile, _ := cmd.Flags().GetString("input-file")
 	customSCFile, _ := cmd.Flags().GetString("custom-sc-file")
 	refreshInterval, _ := cmd.Flags().GetString("refresh-interval")
+	agentsFile, _ := cmd.Flags().GetString("agents-file")
 
 	interval, err := time.ParseDuration(refreshInterval)
 	if err != nil {
 		log.Fatalf("failed to parse refresh interval: %s", err)
 	}
 
+	os.MkdirAll(filepath.Dir(outputFile), 0755)
+
 	var jobs []prometheus.ScrapeConfig
-	var pc prometheusConfig
+	var pc prometheus.Config
 
 	yamlFile, err := ioutil.ReadFile(inputFile)
 	if err != nil {
@@ -58,7 +53,7 @@ func Start(cmd *cobra.Command, args []string) {
 		log.Debugf("Sleeping for %s", interval)
 		time.Sleep(interval)
 
-		agents, err := retrieveAgentsList("agents.yml")
+		agents, err := retrieveAgentsList(agentsFile)
 		if err != nil {
 			log.Errorf("failed to retrieve agents list: %s", err)
 			continue
@@ -81,13 +76,10 @@ func Start(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
-	// Write basic output file to allow prometheus server to start
-	//os.MkdirAll(filepath.Dir(outputFile), 0755)
-	//ioutil.WriteFile(outputFile, yamlFile, 0644)
 	return
 }
 
-func updatePromConfig(pc *prometheusConfig, jobs []prometheus.ScrapeConfig, outputFile, customSCFile string) (err error) {
+func updatePromConfig(pc *prometheus.Config, jobs []prometheus.ScrapeConfig, outputFile, customSCFile string) (err error) {
 	for _, job := range jobs {
 		err = formatScrapeConfig(&job, customSCFile)
 		if err != nil {

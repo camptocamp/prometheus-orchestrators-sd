@@ -10,6 +10,7 @@ var (
 	outputFile   string
 	inputFile    string
 	customSCFile string
+	agentsFile   string
 )
 
 var serverCmd = &cobra.Command{
@@ -23,6 +24,10 @@ var serverCmd = &cobra.Command{
 		if inputFile == "" {
 			inputFile = "prometheus.yml"
 		}
+
+		if agentsFile == "" {
+			agentsFile = "agents.yml"
+		}
 	},
 	Run: server.Start,
 }
@@ -31,5 +36,6 @@ func init() {
 	serverCmd.Flags().StringVarP(&outputFile, "output-file", "o", "", "Output file (default: prometheus.yml)")
 	serverCmd.Flags().StringVarP(&inputFile, "input-file", "k", "", "Input file (default: prometheus.yml)")
 	serverCmd.Flags().StringVarP(&customSCFile, "custom-sc-file", "c", "", "Custom scrape config fields file")
+	serverCmd.Flags().StringVarP(&agentsFile, "agents-file", "a", "", "Agents list file path (default: agents.yml)")
 	rootCmd.AddCommand(serverCmd)
 }

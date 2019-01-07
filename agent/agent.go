@@ -14,6 +14,7 @@ import (
 	"github.com/camptocamp/prometheus-orchestrators-sd/prometheus"
 )
 
+// Start is the main function
 func Start(cmd *cobra.Command, args []string) {
 	bindAddress, _ := cmd.Flags().GetString("bind-address")
 	orchArg, _ := cmd.Flags().GetString("orchestrator")
