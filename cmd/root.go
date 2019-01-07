@@ -32,8 +32,8 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().StringVarP(&psk, "psk", "p", os.Getenv("POSD_PSK"), "Pre-shared key which allows communication between agent and server.")
-	rootCmd.PersistentFlags().StringVarP(&refreshInterval, "refresh-interval", "i", os.Getenv("POSD_INTERVAL"), "Seconds between two targets discovery.")
-	rootCmd.PersistentFlags().StringVarP(&bindAddress, "bind-address", "b", "", "Address to bind on.")
+	rootCmd.PersistentFlags().StringVarP(&refreshInterval, "refresh-interval", "r", os.Getenv("POSD_REFRESH_INTERVAL"), "Seconds between two targets discovery.")
+	rootCmd.PersistentFlags().StringVarP(&bindAddress, "bind-address", "b", os.Getenv("POSD_BIND_ADDRESS"), "Address to bind on.")
 }
 
 func initConfig() {

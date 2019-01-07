@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 
 	"github.com/camptocamp/prometheus-orchestrators-sd/server"
@@ -33,9 +35,9 @@ var serverCmd = &cobra.Command{
 }
 
 func init() {
-	serverCmd.Flags().StringVarP(&outputFile, "output-file", "o", "", "Output file (default: prometheus.yml)")
-	serverCmd.Flags().StringVarP(&inputFile, "input-file", "k", "", "Input file (default: prometheus.yml)")
-	serverCmd.Flags().StringVarP(&customSCFile, "custom-sc-file", "c", "", "Custom scrape config fields file")
-	serverCmd.Flags().StringVarP(&agentsFile, "agents-file", "a", "", "Agents list file path (default: agents.yml)")
+	serverCmd.Flags().StringVarP(&outputFile, "output-file", "o", os.Getenv("POSD_OUTPUT_FILE"), "Output file (default: prometheus.yml)")
+	serverCmd.Flags().StringVarP(&inputFile, "input-file", "i", os.Getenv("POSD_INPUT_FILE"), "Input file (default: prometheus.yml)")
+	serverCmd.Flags().StringVarP(&customSCFile, "custom-sc-file", "c", os.Getenv("POSD_CUSTOM_SC_FILE"), "Custom scrape config fields file")
+	serverCmd.Flags().StringVarP(&agentsFile, "agents-file", "a", os.Getenv("POSD_AGENTS_FILE"), "Agents list file path (default: agents.yml)")
 	rootCmd.AddCommand(serverCmd)
 }
