@@ -11,6 +11,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
@@ -196,8 +197,7 @@ func retrieveJobsFromAgent(endpoint, psk string) (jobs []prometheus.ScrapeConfig
 func httpServer(bindAddress string) {
 	router := mux.NewRouter().StrictSlash(true)
 
-	router.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-	}).Methods("GET")
+	router.Path("/metrics").Handler(prom.Handler())
 
 	log.Infof("Prometheus endpoint on http://%s/metrics", bindAddress)
 	log.Fatal(http.ListenAndServe(bindAddress, router))

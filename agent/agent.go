@@ -7,6 +7,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
@@ -48,8 +49,7 @@ func Start(cmd *cobra.Command, args []string) {
 func apiServer(bindAddress string, psk string, jobs *[]prometheus.ScrapeConfig) {
 	router := mux.NewRouter().StrictSlash(true)
 
-	router.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-	}).Methods("GET")
+	router.Path("/metrics").Handler(prom.Handler())
 
 	router.HandleFunc("/jobs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != fmt.Sprintf("Bearer %s", psk) {
