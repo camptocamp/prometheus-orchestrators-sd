@@ -27,6 +27,7 @@ func Start(cmd *cobra.Command, args []string) {
 	customSCFile, _ := cmd.Flags().GetString("custom-sc-file")
 	refreshInterval, _ := cmd.Flags().GetString("refresh-interval")
 	agentsFile, _ := cmd.Flags().GetString("agents-file")
+	prometheusServer, _ := cmd.Flags().GetString("prometheus-server")
 
 	interval, err := time.ParseDuration(refreshInterval)
 	if err != nil {
@@ -68,19 +69,56 @@ func Start(cmd *cobra.Command, args []string) {
 				}).Errorf("failed to retrieve jobs from agent: %s", err)
 				continue
 			}
-			err = updatePromConfig(&pc, jobs, outputFile, customSCFile)
+			needReload, err := updatePromConfig(&pc, jobs, outputFile, customSCFile)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"agent": agentName,
 				}).Errorf("failed to update prometheus config: %s", err)
 				continue
 			}
+
+			if needReload && prometheusServer != "" {
+				err = reloadPrometheus(prometheusServer)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"agent": agentName,
+					}).Errorf("failed to reload prometheus configuration: %s", err)
+					continue
+				}
+			}
 		}
 	}
 	return
 }
 
-func updatePromConfig(pc *prometheus.Config, jobs []prometheus.ScrapeConfig, outputFile, customSCFile string) (err error) {
+func reloadPrometheus(prometheusServer string) (err error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/-/reload", prometheusServer), nil)
+	if err != nil {
+		err = fmt.Errorf("failed to build request: %s", err)
+		return
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		err = fmt.Errorf("failed to connect prometheus server: %s", err)
+		return
+	}
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		err = fmt.Errorf("failed to read body: %s", err)
+		return
+	}
+
+	if res.StatusCode >= 200 && res.StatusCode <= 299 {
+		log.Infof("Prometheus configuration successfully reloaded.")
+	} else {
+		log.Warningf("Failed to reload Prometheus configuration: [%s] %s", res.StatusCode, body)
+	}
+	return
+}
+
+func updatePromConfig(pc *prometheus.Config, jobs []prometheus.ScrapeConfig, outputFile, customSCFile string) (needReload bool, err error) {
 	for _, job := range jobs {
 		err = formatScrapeConfig(&job, customSCFile)
 		if err != nil {
@@ -89,6 +127,7 @@ func updatePromConfig(pc *prometheus.Config, jobs []prometheus.ScrapeConfig, out
 		}
 
 		exists := false
+		needReload = false
 		for sck, sc := range pc.ScrapeConfigs {
 			if sc.JobName == job.JobName {
 				exists = true
@@ -99,6 +138,7 @@ func updatePromConfig(pc *prometheus.Config, jobs []prometheus.ScrapeConfig, out
 				log.WithFields(log.Fields{
 					"job_name": job.JobName,
 				}).Infof("prometheus scrape config updated")
+				needReload = true
 			}
 		}
 		if !exists {
@@ -106,6 +146,7 @@ func updatePromConfig(pc *prometheus.Config, jobs []prometheus.ScrapeConfig, out
 			log.WithFields(log.Fields{
 				"job_name": job.JobName,
 			}).Infof("prometheus scrape config added")
+			needReload = true
 		}
 
 		if err != nil {

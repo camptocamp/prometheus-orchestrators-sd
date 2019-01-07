@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	outputFile   string
-	inputFile    string
-	customSCFile string
-	agentsFile   string
+	outputFile       string
+	inputFile        string
+	customSCFile     string
+	agentsFile       string
+	prometheusServer string
 )
 
 var serverCmd = &cobra.Command{
@@ -39,5 +40,6 @@ func init() {
 	serverCmd.Flags().StringVarP(&inputFile, "input-file", "i", os.Getenv("POSD_INPUT_FILE"), "Input file (default: prometheus.yml)")
 	serverCmd.Flags().StringVarP(&customSCFile, "custom-sc-file", "c", os.Getenv("POSD_CUSTOM_SC_FILE"), "Custom scrape config fields file")
 	serverCmd.Flags().StringVarP(&agentsFile, "agents-file", "a", os.Getenv("POSD_AGENTS_FILE"), "Agents list file path (default: agents.yml)")
+	serverCmd.Flags().StringVarP(&prometheusServer, "prometheus-server", "s", os.Getenv("POSD_PROMETHEUS_SERVER"), "Prometheus server to reload when config is updated.")
 	rootCmd.AddCommand(serverCmd)
 }
