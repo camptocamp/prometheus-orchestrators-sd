@@ -12,9 +12,8 @@ var (
 )
 
 var agentCmd = &cobra.Command{
-	Use:   "agent [posd server]",
+	Use:   "agent",
 	Short: "Start POSD agent",
-	Args:  cobra.MinimumNArgs(1),
 	Run:   agent.Start,
 }
 
